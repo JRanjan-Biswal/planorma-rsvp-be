@@ -43,8 +43,8 @@ router.post('/send', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     // Get authenticated user info
-    const userName = req.user?.name || 'User';
     const userEmail = req.user?.email || '';
+    const userName = userEmail ? userEmail.split('@')[0] : 'User';
 
     // Create HTML email content
     const htmlContent = `
