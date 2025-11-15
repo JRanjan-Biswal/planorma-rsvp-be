@@ -44,6 +44,7 @@ router.get(
       const limit = parseInt(req.query.limit as string) || 10;
       const search = (req.query.search as string) || '';
       const statusFilter = req.query.status as string;
+      const inviteTypeFilter = req.query.inviteType as string; // 'private' or 'public'
       const skip = (page - 1) * limit;
 
       // Build search query
@@ -92,7 +93,7 @@ router.get(
         tokenRsvps.map((r) => [r.tokenId?.toString(), { status: r.status, companions: r.companions || 0 }])
       );
 
-      // Map tokens with their RSVP status
+      // Map tokens with their RSVP status (private invites)
       let tokensWithStatus = allTokens.map((token) => {
         const userId = emailToUserIdMap.get(token.email);
         let rsvpStatus: string | null = null;
@@ -120,23 +121,70 @@ router.get(
           createdAt: token.createdAt,
           rsvpStatus,
           companions,
+          isPrivateInvite: true, // This is a private invitation
         };
       });
+
+      // Get public RSVPs (RSVPs without tokens)
+      const publicRsvpsQuery: any = {
+        eventId: req.params.eventId,
+        tokenId: { $exists: false },
+        userId: { $exists: false },
+      };
+
+      // Apply search to public RSVPs too
+      if (search) {
+        publicRsvpsQuery.$or = [
+          { guestEmail: { $regex: search, $options: 'i' } },
+          { guestName: { $regex: search, $options: 'i' } },
+        ];
+      }
+
+      const publicRsvps = await RSVP.find(publicRsvpsQuery)
+        .sort({ createdAt: -1 })
+        .lean();
+
+      // Map public RSVPs to match token structure
+      const publicRsvpsWithStatus = publicRsvps.map((rsvp) => ({
+        id: rsvp._id.toString(),
+        email: rsvp.guestEmail || '',
+        name: rsvp.guestName || null,
+        token: null, // No token for public RSVPs
+        createdAt: rsvp.createdAt,
+        rsvpStatus: rsvp.status,
+        companions: rsvp.companions || 0,
+        isPrivateInvite: false, // This is a public RSVP
+      }));
+
+      // Combine tokens and public RSVPs
+      let allAttendees = [...tokensWithStatus, ...publicRsvpsWithStatus];
+
+      // Sort by creation date (newest first)
+      allAttendees.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       // Apply status filter
       if (statusFilter) {
         if (statusFilter === 'pending') {
-          tokensWithStatus = tokensWithStatus.filter(t => !t.rsvpStatus);
+          allAttendees = allAttendees.filter(t => !t.rsvpStatus);
         } else {
-          tokensWithStatus = tokensWithStatus.filter(t => t.rsvpStatus === statusFilter);
+          allAttendees = allAttendees.filter(t => t.rsvpStatus === statusFilter);
+        }
+      }
+
+      // Apply invite type filter
+      if (inviteTypeFilter) {
+        if (inviteTypeFilter === 'private') {
+          allAttendees = allAttendees.filter(t => t.isPrivateInvite === true);
+        } else if (inviteTypeFilter === 'public') {
+          allAttendees = allAttendees.filter(t => t.isPrivateInvite === false);
         }
       }
 
       // Get total count after filtering
-      const totalTokens = tokensWithStatus.length;
+      const totalTokens = allAttendees.length;
 
       // Apply pagination
-      const paginatedTokens = tokensWithStatus.slice(skip, skip + limit);
+      const paginatedTokens = allAttendees.slice(skip, skip + limit);
 
       res.json({
         tokens: paginatedTokens,

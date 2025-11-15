@@ -75,7 +75,38 @@ router.get(
   }
 );
 
-// Get single event
+// Get single event (public endpoint - no auth required)
+router.get(
+  '/public/:id',
+  apiRateLimiter,
+  async (req: express.Request, res: Response) => {
+    try {
+      const event = await Event.findById(req.params.id).lean();
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      res.json({
+        event: {
+          id: event._id.toString(),
+          title: event.title,
+          description: event.description || '',
+          date: event.date.toISOString(),
+          location: event.location,
+          category: event.category,
+          capacity: event.capacity,
+          hostName: event.hostName,
+          hostEmail: event.hostEmail,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// Get single event (admin only - with auth)
 router.get(
   '/:id',
   authenticate,

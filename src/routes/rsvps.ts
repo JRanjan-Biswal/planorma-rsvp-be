@@ -154,6 +154,52 @@ router.get(
   }
 );
 
+// Get public RSVPs for an event (admin only) - RSVPs made without token/invitation
+router.get(
+  '/event/:eventId/public-rsvps',
+  authenticate,
+  requireAdmin,
+  async (req: AuthRequest, res: Response) => {
+    try {
+      // Verify event exists and belongs to user
+      const event = await Event.findOne({
+        _id: req.params.eventId,
+        createdBy: req.user!._id,
+      });
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Find RSVPs that don't have a tokenId (public RSVPs)
+      const publicRsvps = await RSVP.find({ 
+        eventId: req.params.eventId,
+        tokenId: { $exists: false },
+        userId: { $exists: false }
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      res.json({
+        rsvps: publicRsvps.map((rsvp) => ({
+          id: rsvp._id.toString(),
+          eventId: rsvp.eventId.toString(),
+          guestName: rsvp.guestName,
+          guestEmail: rsvp.guestEmail,
+          status: rsvp.status,
+          companions: rsvp.companions || 0,
+          dietaryPreference: rsvp.dietaryPreference,
+          companionDietaryPreference: rsvp.companionDietaryPreference,
+          createdAt: rsvp.createdAt,
+        })),
+      });
+    } catch (error) {
+      console.error('Get public RSVPs error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
 // Submit RSVP via token (public endpoint)
 router.post(
   '/token/:token',
@@ -371,6 +417,166 @@ router.get(
       res.json(stats);
     } catch (error) {
       console.error('Get dietary stats error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+// Public RSVP endpoint (no token required - anyone can RSVP with email)
+const publicRsvpSchema = z.object({
+  status: z.enum(['going', 'not-going']),
+  companions: z.number().min(0).max(5).default(0),
+  guestName: z.string().min(1, 'Name is required'),
+  guestEmail: z.string().email('Valid email is required'),
+  dietaryPreference: z.enum(['nonveg', 'veg', 'vegan']).optional(),
+  companionDietaryPreference: z.enum(['nonveg', 'veg', 'vegan']).optional(),
+});
+
+router.post(
+  '/public/:eventId',
+  rsvpRateLimiter,
+  async (req: express.Request, res: Response) => {
+    try {
+      const validated = publicRsvpSchema.parse(req.body);
+
+      // Check if event exists
+      const event = await Event.findById(req.params.eventId).lean();
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Check if this email has already responded for this event
+      const existingRsvp = await RSVP.findOne({
+        eventId: req.params.eventId,
+        guestEmail: validated.guestEmail.toLowerCase(),
+      });
+
+      if (existingRsvp) {
+        return res.status(400).json({
+          error: 'This email has already been used to RSVP for this event',
+          rsvp: {
+            status: existingRsvp.status,
+            companions: existingRsvp.companions,
+            respondedAt: existingRsvp.createdAt,
+          },
+        });
+      }
+
+      // Calculate total attendees for this RSVP (1 + companions)
+      const totalAttendees = validated.status === 'going' ? 1 + validated.companions : 0;
+
+      // Check capacity if going
+      if (validated.status === 'going') {
+        // Get current RSVP count including companions
+        const rsvps = await RSVP.find({
+          eventId: req.params.eventId,
+          status: 'going',
+        }).lean();
+
+        const currentAttendees = rsvps.reduce((sum, rsvp) => {
+          return sum + 1 + (rsvp.companions || 0);
+        }, 0);
+
+        if (currentAttendees + totalAttendees > event.capacity) {
+          return res.status(400).json({
+            error: `Event is full. Only ${event.capacity - currentAttendees} ${
+              event.capacity - currentAttendees === 1 ? 'spot' : 'spots'
+            } remaining.`,
+            availableSpots: event.capacity - currentAttendees,
+          });
+        }
+      }
+
+      // Create RSVP (no userId or tokenId for public RSVPs)
+      const rsvpData: any = {
+        eventId: req.params.eventId,
+        status: validated.status,
+        companions: validated.companions,
+        guestName: validated.guestName.trim(),
+        guestEmail: validated.guestEmail.toLowerCase().trim(),
+      };
+
+      // Only include dietary preferences if they are specified
+      if (validated.dietaryPreference) {
+        rsvpData.dietaryPreference = validated.dietaryPreference;
+      }
+      if (validated.companionDietaryPreference) {
+        rsvpData.companionDietaryPreference = validated.companionDietaryPreference;
+      }
+
+      const rsvp = await RSVP.create(rsvpData);
+
+      res.status(201).json({
+        success: true,
+        message: validated.status === 'going'
+          ? `RSVP confirmed! You ${validated.companions > 0 ? `and ${validated.companions} companion${validated.companions > 1 ? 's' : ''}` : 'have'} been registered.`
+          : 'Thank you for your response.',
+        rsvp: {
+          id: (rsvp._id as mongoose.Types.ObjectId).toString(),
+          status: rsvp.status,
+          companions: rsvp.companions,
+          totalAttendees,
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        console.error('Validation error:', error.errors);
+        return res.status(400).json({
+          error: 'Validation error',
+          details: error.errors,
+        });
+      }
+      console.error('Public RSVP error:', error);
+      console.error('Error details:', error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  }
+);
+
+// Check if email has already RSVPed for an event (public endpoint)
+router.get(
+  '/public/:eventId/check/:email',
+  async (req: express.Request, res: Response) => {
+    try {
+      const email = req.params.email.toLowerCase().trim();
+
+      // Check if event exists
+      const event = await Event.findById(req.params.eventId).lean();
+
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Check if email has already responded
+      const rsvp = await RSVP.findOne({
+        eventId: req.params.eventId,
+        guestEmail: email,
+      }).lean();
+
+      if (rsvp) {
+        return res.json({
+          hasResponded: true,
+          rsvp: {
+            status: rsvp.status,
+            companions: rsvp.companions,
+            guestName: rsvp.guestName,
+            totalAttendees: rsvp.status === 'going' ? 1 + (rsvp.companions || 0) : 0,
+            respondedAt: rsvp.createdAt,
+            dietaryPreference: rsvp.dietaryPreference,
+            companionDietaryPreference: rsvp.companionDietaryPreference,
+          },
+        });
+      }
+
+      res.json({
+        hasResponded: false,
+      });
+    } catch (error) {
+      console.error('Check public RSVP status error:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   }

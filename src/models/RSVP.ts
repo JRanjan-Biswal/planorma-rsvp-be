@@ -66,7 +66,7 @@ const RSVPSchema = new Schema<IRSVP>(
   }
 );
 
-// Ensure one RSVP per user per event OR one RSVP per token per event
+// Ensure one RSVP per user per event OR one RSVP per token per event OR one RSVP per email per event
 // Using partial filter expressions to avoid null userId/tokenId conflicts
 RSVPSchema.index(
   { eventId: 1, userId: 1 },
@@ -80,6 +80,17 @@ RSVPSchema.index(
   {
     unique: true,
     partialFilterExpression: { tokenId: { $exists: true, $type: 'objectId' } }
+  }
+);
+// Index for public RSVPs (without token) - one RSVP per email per event
+RSVPSchema.index(
+  { eventId: 1, guestEmail: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { 
+      guestEmail: { $exists: true, $type: 'string' },
+      tokenId: { $exists: false }
+    }
   }
 );
 RSVPSchema.index({ eventId: 1, status: 1 });
