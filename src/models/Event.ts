@@ -7,6 +7,7 @@ export interface IEvent extends Document {
   location: string;
   category: string;
   capacity: number;
+  allowedCompanions: number;
   hostName: string;
   hostMobile: string;
   hostEmail: string;
@@ -47,7 +48,14 @@ const EventSchema = new Schema<IEvent>(
     capacity: {
       type: Number,
       required: [true, 'Capacity is required'],
-      min: [1, 'Capacity must be at least 1'],
+      min: [10, 'Capacity must be at least 10'],
+    },
+    allowedCompanions: {
+      type: Number,
+      required: [true, 'Allowed companions is required'],
+      min: [0, 'Allowed companions cannot be negative'],
+      max: [10, 'Allowed companions cannot exceed 10'],
+      default: 0,
     },
     hostName: {
       type: String,
