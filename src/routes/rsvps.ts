@@ -222,6 +222,13 @@ router.post(
         return res.status(404).json({ error: 'Event not found' });
       }
 
+      // Check if event has expired
+      const eventDate = new Date(event.date);
+      const now = new Date();
+      if (eventDate < now) {
+        return res.status(400).json({ error: 'This event has expired. RSVPs are no longer being accepted.' });
+      }
+
       // Check if already responded
       const existingRsvp = await RSVP.findOne({
         tokenId: tokenDoc._id,
@@ -444,6 +451,13 @@ router.post(
 
       if (!event) {
         return res.status(404).json({ error: 'Event not found' });
+      }
+
+      // Check if event has expired
+      const eventDate = new Date(event.date);
+      const now = new Date();
+      if (eventDate < now) {
+        return res.status(400).json({ error: 'This event has expired. RSVPs are no longer being accepted.' });
       }
 
       // Check if this email has already responded for this event

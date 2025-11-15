@@ -154,10 +154,19 @@ router.post(
     try {
       const validated = eventSchema.parse(req.body);
 
+      // Validate that the event date is not in the past
+      const eventDate = new Date(validated.date);
+      const now = new Date();
+      if (eventDate < now) {
+        return res.status(400).json({ 
+          error: 'Cannot create an event for a past date. Please select a future date and time.' 
+        });
+      }
+
       const event: IEvent = await Event.create({
         ...validated,
         description: validated.description || '',
-        date: new Date(validated.date),
+        date: eventDate,
         createdBy: req.user!._id,
       });
 
@@ -198,6 +207,15 @@ router.put(
     try {
       const validated = eventSchema.parse(req.body);
 
+      // Validate that the event date is not in the past
+      const eventDate = new Date(validated.date);
+      const now = new Date();
+      if (eventDate < now) {
+        return res.status(400).json({ 
+          error: 'Cannot update event to a past date. Please select a future date and time.' 
+        });
+      }
+
       const event = await Event.findOneAndUpdate(
         {
           _id: req.params.id,
@@ -206,7 +224,7 @@ router.put(
         {
           ...validated,
           description: validated.description || '',
-          date: new Date(validated.date),
+          date: eventDate,
         },
         {
           new: true,

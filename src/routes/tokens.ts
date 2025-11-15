@@ -221,6 +221,13 @@ router.post(
         return res.status(404).json({ error: 'Event not found' });
       }
 
+      // Check if event has expired
+      const eventDate = new Date(event.date);
+      const now = new Date();
+      if (eventDate < now) {
+        return res.status(400).json({ error: 'Cannot invite users to an expired event' });
+      }
+
       const token = generateToken();
 
       const tokenDoc = await Token.create({
