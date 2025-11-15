@@ -63,7 +63,7 @@ router.post('/send', authenticate, async (req: AuthRequest, res: Response) => {
         </div>
         
         <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">
-          <p>This email was sent from the Planorama RSVP application.</p>
+          <p>This email was sent from the HappyHosts RSVP application.</p>
           <p>Sent at: ${new Date().toLocaleString()}</p>
         </div>
       </div>
@@ -80,7 +80,7 @@ Message:
 ${message}
 
 ---
-This email was sent from the Planorama RSVP application.
+This email was sent from the HappyHosts RSVP application.
 Sent at: ${new Date().toLocaleString()}
     `;
 

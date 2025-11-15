@@ -1,6 +1,6 @@
-# Planorama Backend API
+# HappyHosts Backend API
 
-Express.js backend API for the Planorama RSVP application with MongoDB and JWT authentication.
+Express.js backend API for the HappyHosts RSVP application with MongoDB and JWT authentication.
 
 ## Features
 
@@ -163,5 +163,5 @@ The API uses a centralized error handler that:
 
 ## License
 
-This project is created for the Planorama interview assignment.
+This project is created for the HappyHosts interview assignment.
 
