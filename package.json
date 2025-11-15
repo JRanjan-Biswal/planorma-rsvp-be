@@ -18,7 +18,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "nodemailer": "^7.0.10",
-    "planorama-rsvp-assignment": "file:..",
+    "typescript": "^5.3.3",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -29,7 +29,6 @@
     "@types/node": "^20.10.5",
     "@types/nodemailer": "^7.0.3",
     "nodemon": "^3.0.2",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "tsx": "^4.7.0"
   }
 }
