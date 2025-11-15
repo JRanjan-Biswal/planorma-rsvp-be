@@ -6,8 +6,7 @@
   "scripts": {
     "dev": "nodemon --exec tsx src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js",
-    "vercel-build": "tsc"
+    "start": "nodemon --exec tsx src/server.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",
